@@ -75,6 +75,7 @@ async function pollJobs() {
     const canCancel = job.status === 'queued' || job.status === 'running';
 
     row.innerHTML = `
+      <td><code>${escapeHtml(job.id)}</code></td>
       <td>${escapeHtml(job.source_user)}</td>
       <td>${escapeHtml(job.source_server)}</td>
       <td>${escapeHtml(job.destination_user)}</td>
