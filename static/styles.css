@@ -1,0 +1,78 @@
+body {
+  padding: 1rem 0;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+#single-message.success,
+#batch-message.success {
+  color: #146c2e;
+}
+
+#single-message.error,
+#batch-message.error {
+  color: #b42318;
+}
+
+.badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.badge-queued {
+  background: #fef0c7;
+}
+
+.badge-running {
+  background: #dbeafe;
+}
+
+.badge-success {
+  background: #dcfce7;
+}
+
+.badge-failed {
+  background: #fee2e2;
+}
+
+.badge-canceled {
+  background: #f3e8ff;
+}
+
+.msgs-left {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.actions {
+  white-space: nowrap;
+}
+
+.actions button {
+  margin-right: 0.4rem;
+}
+
+#logs-content {
+  max-height: 55vh;
+  overflow: auto;
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 1rem;
+  border-radius: 0.5rem;
+}
+
+.logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+}

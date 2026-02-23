@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Migration Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+<main class="container">
+  <h1>Email Migration Dashboard</h1>
+  <p>Run a single migration, or upload a batch CSV with: <code>sourceserver,sourceuser,sourcepassword,destinationserver,destinationuser,destinationpassword</code>.</p>
+
+  <section class="grid two-col">
+    <article>
+      <h2>Single Migration</h2>
+      <form id="single-form">
+        <input name="source_server" placeholder="Source server" required>
+        <input name="source_user" placeholder="Source user/email" required>
+        <input type="password" name="source_password" placeholder="Source password" required>
+        <input name="destination_server" placeholder="Destination server" required>
+        <input name="destination_user" placeholder="Destination user/email" required>
+        <input type="password" name="destination_password" placeholder="Destination password" required>
+        <button type="submit">Run Single Migration</button>
+      </form>
+      <p id="single-message" role="status"></p>
+    </article>
+
+    <article>
+      <h2>Batch Migration (CSV)</h2>
+      <form id="batch-form" enctype="multipart/form-data">
+        <label>
+          CSV File
+          <input type="file" name="csv_file" accept=".csv" required>
+        </label>
+        <button type="submit">Start Batch Migration</button>
+      </form>
+      <p id="batch-message" role="status"></p>
+    </article>
+  </section>
+
+  <article>
+    <h2>Job Status</h2>
+    <table>
+      <thead>
+      <tr>
+        <th>Job ID</th>
+        <th>Source User</th>
+        <th>Source Server</th>
+        <th>Destination User</th>
+        <th>Destination Server</th>
+        <th>Status</th>
+        <th>Msgs Left</th>
+        <th>Error</th>
+        <th>Action</th>
+      </tr>
+      </thead>
+      <tbody id="jobs-table"></tbody>
+    </table>
+  </article>
+
+  <dialog id="logs-dialog">
+    <article>
+      <header class="logs-header">
+        <strong>Migration Logs</strong>
+        <button type="button" id="close-logs" class="secondary">Close</button>
+      </header>
+      <p id="logs-title"></p>
+      <pre id="logs-content"></pre>
+    </article>
+  </dialog>
+</main>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
