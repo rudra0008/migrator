@@ -51,6 +51,7 @@
         <th>Destination User</th>
         <th>Destination Server</th>
         <th>Status</th>
+        <th>Msgs Left</th>
         <th>Error</th>
         <th>Action</th>
       </tr>
@@ -58,6 +59,17 @@
       <tbody id="jobs-table"></tbody>
     </table>
   </article>
+
+  <dialog id="logs-dialog">
+    <article>
+      <header class="logs-header">
+        <strong>Migration Logs</strong>
+        <button type="button" id="close-logs" class="secondary">Close</button>
+      </header>
+      <p id="logs-title"></p>
+      <pre id="logs-content"></pre>
+    </article>
+  </dialog>
 </main>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

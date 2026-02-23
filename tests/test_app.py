@@ -81,6 +81,20 @@ def test_cancel_queued_job_sets_canceled_status():
     assert manager.jobs[job_id].status == "canceled"
 
 
+def test_extract_msgs_left_eta_line():
+    assert MigrationManager._extract_msgs_left("... ETA: time ... 326/327 msgs left") == "326/327"
+    assert MigrationManager._extract_msgs_left("... ETA: time ... 1,226/3,327 msgs left") == "1226/3327"
+    assert MigrationManager._extract_msgs_left("326/327 msgs left") is None
+    assert MigrationManager._extract_msgs_left("ETA: soon but no mailbox counters") is None
+
+
+def test_get_job_logs_not_found():
+    manager = MigrationManager(max_workers=1)
+    ok, message = manager.get_job_logs("missing")
+    assert ok is False
+    assert message == "Job not found."
+
+
 def test_expected_headers_constant():
     assert CSV_HEADERS == [
         "sourceserver",

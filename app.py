@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import os
+import re
 import subprocess
 import threading
 import uuid
@@ -22,6 +23,8 @@ CSV_HEADERS = [
     "destinationpassword",
 ]
 
+MSGS_LEFT_PATTERN = re.compile(r"([\d,]+)\s*/\s*([\d,]+)\s*msgs\s+left", re.IGNORECASE)
+
 
 @dataclass
 class MigrationJob:
@@ -34,6 +37,7 @@ class MigrationJob:
     destination_user: str
     destination_password: str
     status: str = "queued"
+    msgs_left: str = "-"
     started_at: str | None = None
     finished_at: str | None = None
     error: str | None = None
@@ -81,6 +85,8 @@ class MigrationManager:
             destination_server=destination_server,
             destination_user=destination_user,
             destination_password=destination_password,
+            status="queued",
+            msgs_left="-",
         )
         with self.lock:
             self.jobs[job.id] = job
@@ -101,6 +107,7 @@ class MigrationManager:
                     job.status = "canceled"
                     job.finished_at = datetime.utcnow().isoformat()
                     job.error = "Migration canceled before start."
+                    self._append_log(job, "[SYSTEM] Migration canceled before start.")
                     return True, "Queued migration canceled."
                 return False, "Unable to cancel queued job (it may have started)."
 
@@ -110,9 +117,32 @@ class MigrationManager:
                 job.status = "canceled"
                 job.error = "Migration canceled by user."
                 job.finished_at = datetime.utcnow().isoformat()
+                self._append_log(job, "[SYSTEM] Cancellation requested by user.")
                 return True, "Running migration cancellation requested."
 
             return False, "Unable to cancel running job."
+
+    @staticmethod
+    def _append_log(job: MigrationJob, line: str) -> None:
+        if not line:
+            return
+        if job.output:
+            job.output += "\n" + line.rstrip("\n")
+        else:
+            job.output = line.rstrip("\n")
+
+    @staticmethod
+    def _extract_msgs_left(line: str) -> str | None:
+        if "ETA" not in line or "msgs left" not in line.lower():
+            return None
+
+        msgs_left_match = MSGS_LEFT_PATTERN.search(line)
+        if not msgs_left_match:
+            return None
+
+        left = msgs_left_match.group(1).replace(",", "")
+        total = msgs_left_match.group(2).replace(",", "")
+        return f"{left}/{total}"
 
     def _run_migration(self, job_id: str) -> None:
         with self.lock:
@@ -120,7 +150,9 @@ class MigrationManager:
             if job.status == "canceled":
                 return
             job.status = "running"
+            job.msgs_left = "starting..."
             job.started_at = datetime.utcnow().isoformat()
+            self._append_log(job, f"[SYSTEM] Migration started at {job.started_at}")
 
         command = [
             "imapsync",
@@ -140,38 +172,67 @@ class MigrationManager:
         ]
 
         try:
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
             with self.lock:
                 self.processes[job_id] = process
 
-            stdout, stderr = process.communicate()
-            output = (stdout or "") + ("\n" + stderr if stderr else "")
+            assert process.stdout is not None
+            for line in process.stdout:
+                normalized = line.replace("\r", "\n")
+                for chunk in normalized.splitlines():
+                    clean = chunk.strip()
+                    if not clean:
+                        continue
+                    with self.lock:
+                        self._append_log(job, clean)
+                        parsed = self._extract_msgs_left(clean)
+                        if parsed is not None:
+                            job.msgs_left = parsed
+
+            process.wait()
 
             with self.lock:
-                job.output = output.strip()
                 if job.status == "canceled":
-                    pass
+                    job.msgs_left = job.msgs_left if job.msgs_left != "-" else "canceled"
                 elif process.returncode == 0:
                     job.status = "success"
+                    job.msgs_left = "0 left"
                 elif process.returncode == -15:
                     job.status = "canceled"
                     job.error = job.error or "Migration canceled by user."
+                    job.msgs_left = job.msgs_left if job.msgs_left != "-" else "canceled"
                 else:
                     job.status = "failed"
                     job.error = f"imapsync exited with code {process.returncode}"
+                    job.msgs_left = job.msgs_left if job.msgs_left != "-" else "failed"
         except Exception as exc:  # noqa: BLE001
             with self.lock:
                 if job.status != "canceled":
                     job.status = "failed"
                     job.error = str(exc)
+                self._append_log(job, f"[SYSTEM] Exception: {exc}")
         finally:
             with self.lock:
                 job.finished_at = job.finished_at or datetime.utcnow().isoformat()
+                self._append_log(job, f"[SYSTEM] Migration finished at {job.finished_at} with status={job.status}")
                 self.processes.pop(job_id, None)
 
     def all_jobs(self) -> List[MigrationJob]:
         with self.lock:
             return sorted(self.jobs.values(), key=lambda j: j.started_at or "", reverse=True)
+
+    def get_job_logs(self, job_id: str) -> tuple[bool, str]:
+        with self.lock:
+            job = self.jobs.get(job_id)
+            if not job:
+                return False, "Job not found."
+            return True, job.output or "(no logs yet)"
 
 
 def parse_csv(file_storage) -> List[dict]:
@@ -238,6 +299,13 @@ def create_app() -> Flask:
         canceled, message = manager.cancel_job(job_id)
         status_code = 200 if canceled else 400
         return jsonify({"message": message}), status_code
+
+    @app.get("/jobs/<job_id>/logs")
+    def job_logs(job_id: str):
+        ok, logs = manager.get_job_logs(job_id)
+        if not ok:
+            return jsonify({"error": logs}), 404
+        return jsonify({"job_id": job_id, "logs": logs})
 
     @app.get("/api/jobs")
     def jobs_api():
